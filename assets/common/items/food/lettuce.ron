@@ -1,0 +1,22 @@
+ItemDef(
+    name: "Lettuce",
+    description: "A vibrant green leafy vegetable. Lettuce make some salads!",
+    kind: Consumable(
+        kind: Food,
+        effects: [
+            Buff((
+                kind: Saturation,
+                data: (
+                    strength: 1.0,
+                    duration: Some((
+                            secs: 5,
+                            nanos: 0,
+                        )),
+                    ),
+                cat_ids: [Natural],
+            )),
+        ]
+    ),
+    quality: Common,
+    tags: [Food],
+)

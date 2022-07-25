@@ -1,0 +1,73 @@
+# Rust
+target
+
+# Vim
+
+**/.nvimrc
+**/*.vi
+**/*.vim
+**/*.swp
+**/*tags
+
+# IntelliJ
+
+**/.idea/
+**/*.iml
+
+# VSCode
+.vscode/
+/.vscode/*
+!/.vscode/launch.json
+*.code-workspace
+
+# Eclipse
+
+.project
+
+# Veloren
+*.rar
+*.log
+assets/tweak/
+settings.ron
+server_settings.ron
+run.sh
+maps
+screenshots
+notes.md
+notes.txt
+todo.md
+todo.txt
+userdata
+temp
+
+# Profiling and traces
+heaptrack.*
+cargo-timing*
+flamegraph.*
+perf.*
+wgpu-trace/
+
+# allow asset hud settings
+!assets/voxygen/i18n/*/hud/settings.ron
+
+# Export data
+*.csv
+
+# Game data
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# direnv
+/.direnv
+/.envrc
+*.bat
+
+# Mac
+.DS_Store
+
+# Nix
+nix/result*
+/result*
+/shell.nix

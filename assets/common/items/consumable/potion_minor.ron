@@ -1,0 +1,22 @@
+ItemDef(
+    name: "Minor Potion",
+    description: "A small potion concocted from apples and honey.",
+    kind: Consumable(
+        kind: Drink,
+        effects: [
+            Buff((
+                kind: Potion,
+                data: (
+                    strength: 50.0,
+                    duration: Some((
+                            secs: 1,
+                            nanos: 0,
+                        )),
+                    ),
+                cat_ids: [Natural],
+            )),
+        ]
+    ),
+    quality: Common,
+    tags: [Potion],
+)

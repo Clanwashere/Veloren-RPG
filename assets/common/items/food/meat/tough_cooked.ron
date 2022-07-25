@@ -1,0 +1,22 @@
+ItemDef(
+    name: "Cooked Tough Meat",
+    description: "Tastes exotic.",
+    kind: Consumable(
+        kind: Food,
+        effects: [
+            Buff((
+                kind: Saturation,
+                data: (
+                    strength: 2.0,
+                    duration: Some((
+                            secs: 10,
+                            nanos: 0,
+                        )),
+                    ),
+                cat_ids: [Natural],
+            )),
+        ]
+    ),
+    quality: Common,
+    tags: [Food],
+)

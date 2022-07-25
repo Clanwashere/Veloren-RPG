@@ -1,0 +1,151 @@
+cargo-features = ["named-profiles","profile-overrides"]
+
+[workspace]
+members = [
+    "common",
+    "common/assets",
+    "common/base",
+    "common/ecs",
+    "common/net",
+    "common/state",
+    "common/systems",
+    "common/frontend",
+    "client",
+    "plugin/api",
+    "plugin/derive",
+    "plugin/rt",
+    "server",
+    "server-cli",
+    "voxygen",
+    "voxygen/anim",
+    "voxygen/anim/dyn",
+    "voxygen/i18n",
+    "voxygen/dynlib",
+    "voxygen/egui",
+    "voxygen/egui/dyn",
+    "world",
+    "network",
+    "network/protocol",
+]
+
+# default profile for devs, fast to compile, okay enough to run, no debug information
+[profile.dev]
+opt-level = 2
+overflow-checks = true
+debug-assertions = true
+panic = "abort"
+debug = false
+lto = false
+incremental = true
+# All packages that aren't members of this workspace
+[profile.dev.package."*"]
+# TODO: seems like opt-level=2 should be sufficient here....
+opt-level = 3
+[profile.dev.package."veloren-network-protocol"]
+opt-level = 3
+
+
+# this profile is used by developers if dev doesn't has enough debug information,
+# the name must != debug, as debug is used by dev because....
+[profile.debuginfo]
+inherits= 'dev'
+debug = true
+
+# used to perform things that do a *lot* of math (i.e. worldgen) but still need reasonable compilation time.  Ideally this would also
+# add -C target-cpu=native, but I don't think you can set this by profile currently.
+[profile.no_overflow]
+inherits= 'dev'
+overflow-checks = false
+debug-assertions = false
+
+[profile.no_overflow.package."veloren-world"]
+opt-level = 3
+[profile.no_overflow.package."veloren-voxygen-anim"]
+opt-level = 3
+
+# this profile is for profiling with using the no_overflow profile, since release can take signifcant times to build.
+[profile.no_overflow_debuginfo]
+inherits = 'no_overflow'
+debug = 1
+
+# this profile is used for veloren releases, compile time doesn't matter
+# we need stacktraces, light debug information, as much checks as possible
+# I would like to put it in a seperate `official_release` target, but that doesnt share caches with `cargo test` and `cargo bench`
+[profile.release]
+opt-level = 3
+overflow-checks = false
+debug-assertions = false
+lto = true
+debug = false
+panic = "abort" # don't need unwinding so we can skip including the landing pads for that
+# line tables so we can have useful backtraces for in-house crates
+[profile.release.package."veloren-network"]
+debug = 1
+[profile.release.package."veloren-network-protocol"]
+debug = 1
+[profile.release.package."veloren-common"]
+debug = 1
+[profile.release.package."veloren-common-systems"]
+debug = 1
+[profile.release.package."veloren-client"]
+debug = 1
+[profile.release.package."veloren-server"]
+debug = 1
+[profile.release.package."veloren-server-cli"]
+debug = 1
+[profile.release.package."veloren-voxygen"]
+debug = 1
+[profile.release.package."veloren-world"]
+debug = 1
+
+# used for cargo bench
+[profile.bench]
+opt-level = 2
+incremental = true
+
+# this profile is used by developers for release profiling
+[profile.releasedebuginfo]
+inherits =  'release'
+debug = 1
+
+[workspace.metadata.nix]
+systems = ["x86_64-linux"]
+
+[workspace.metadata.nix.cachix]
+name = "veloren-nix"
+key = "veloren-nix.cachix.org-1:zokfKJqVsNV6kI/oJdLF6TYBdNPYGSb+diMVQPn/5Rc="
+
+[workspace.metadata.nix.crateOverride.veloren-network]
+buildInputs = ["openssl"]
+nativeBuildInputs = ["pkg-config"]
+
+[patch.crates-io]
+vek = { git = "https://github.com/yoanlcq/vek.git", rev = "84d5cb65841d46599a986c5477341bea4456be26" }
+# patch wgpu so we can use wgpu-profiler crate
+wgpu = { git = "https://github.com/gfx-rs/wgpu.git", rev = "a92b8549a8e2cb9dac781bafc5ed32828f3caf46" }
+
+# # use the latest fixes in naga (remove when updates trickle down to wgpu-rs)
+# naga = { git = "https://github.com/gfx-rs/naga.git", rev = "3a0f0144112ff621dd7f731bf455adf6cab19164" }
+# # use the latest fixes in gfx (remove when updates trickle down to wgpu-rs)
+# gfx-hal = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-gl = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+# gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx.git", rev = "e305dcca3557923a6a8810162d8dd09cb45a43a6" }
+
+# # Uncomment this to use a local fork of wgpu (for testing purposes)
+# [patch.'https://github.com/gfx-rs/wgpu']
+# wgpu-core = { path = "../wgpu/wgpu-core" }
+# wgpu-types = { path = "../wgpu/wgpu-types" }
+
+# # Uncomment this to use a local fork of gfx-hal (for testing purposes)
+# [patch."https://github.com/gfx-rs/gfx"]
+# gfx-hal = { path = "../gfx/src/hal" }
+# gfx-backend-empty = { path = "../gfx/src/backend/empty" }
+# gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan" }
+# gfx-backend-gl = { path = "../gfx/src/backend/gl" }
+# gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
+# gfx-backend-dx11 = { path = "../gfx/src/backend/dx11" }
+# gfx-backend-metal = { path = "../gfx/src/backend/metal" }

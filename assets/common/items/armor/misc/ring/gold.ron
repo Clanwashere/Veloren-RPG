@@ -1,0 +1,14 @@
+ItemDef(
+    name: "Gold Ring",
+    description: "A plain gold ring... almost as if it is missing a gem.",
+    kind: Armor((
+        kind: Ring,
+        stats: Direct((
+            protection: Some(Normal(0.5)),
+            energy_max: Some(5),
+            crit_power: Some(0.01),
+        )),
+    )),
+    quality: Moderate,
+    tags: [],
+)

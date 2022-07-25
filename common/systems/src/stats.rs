@@ -1,0 +1,222 @@
+use common::{
+    combat,
+    comp::{
+        self,
+        item::MaterialStatManifest,
+        skills::{GeneralSkill, Skill},
+        Body, CharacterState, Combo, Energy, Health, Inventory, Poise, PoiseChange, Pos, SkillSet,
+        Stats, StatsModifier,
+    },
+    event::{EventBus, ServerEvent},
+    resources::{DeltaTime, EntitiesDiedLastTick, Time},
+};
+use common_ecs::{Job, Origin, Phase, System};
+use specs::{
+    shred::ResourceId, Entities, Join, Read, ReadExpect, ReadStorage, SystemData, World, Write,
+    WriteStorage,
+};
+use vek::Vec3;
+
+const ENERGY_REGEN_ACCEL: f32 = 1.0;
+const POISE_REGEN_ACCEL: f32 = 2.0;
+
+#[derive(SystemData)]
+pub struct ReadData<'a> {
+    entities: Entities<'a>,
+    dt: Read<'a, DeltaTime>,
+    time: Read<'a, Time>,
+    server_bus: Read<'a, EventBus<ServerEvent>>,
+    positions: ReadStorage<'a, Pos>,
+    bodies: ReadStorage<'a, Body>,
+    char_states: ReadStorage<'a, CharacterState>,
+    inventories: ReadStorage<'a, Inventory>,
+    msm: ReadExpect<'a, MaterialStatManifest>,
+}
+
+/// This system kills players, levels them up, and regenerates energy.
+#[derive(Default)]
+pub struct Sys;
+impl<'a> System<'a> for Sys {
+    type SystemData = (
+        ReadData<'a>,
+        WriteStorage<'a, Stats>,
+        WriteStorage<'a, SkillSet>,
+        WriteStorage<'a, Health>,
+        WriteStorage<'a, Poise>,
+        WriteStorage<'a, Energy>,
+        WriteStorage<'a, Combo>,
+        Write<'a, EntitiesDiedLastTick>,
+    );
+
+    const NAME: &'static str = "stats";
+    const ORIGIN: Origin = Origin::Common;
+    const PHASE: Phase = Phase::Create;
+
+    fn run(
+        _job: &mut Job<Self>,
+        (
+            read_data,
+            stats,
+            mut skill_sets,
+            mut healths,
+            mut poises,
+            mut energies,
+            mut combos,
+            mut entities_died_last_tick,
+        ): Self::SystemData,
+    ) {
+        entities_died_last_tick.0.clear();
+        let mut server_event_emitter = read_data.server_bus.emitter();
+        let dt = read_data.dt.0;
+
+        // Update stats
+        for (entity, stats, mut health, pos, mut energy, inventory) in (
+            &read_data.entities,
+            &stats,
+            &mut healths,
+            &read_data.positions,
+            &mut energies,
+            read_data.inventories.maybe(),
+        )
+            .join()
+        {
+            let set_dead = { health.should_die() && !health.is_dead };
+
+            if set_dead {
+                let cloned_entity = (entity, *pos);
+                entities_died_last_tick.0.push(cloned_entity);
+                server_event_emitter.emit(ServerEvent::Destroy {
+                    entity,
+                    cause: health.last_change,
+                });
+
+                health.is_dead = true;
+            }
+            let stat = stats;
+
+            if let Some(new_max) = health.needs_maximum_update(stat.max_health_modifiers) {
+                // Only call this if we need to since mutable access will trigger sending an
+                // update to the client.
+                health.update_internal_integer_maximum(new_max);
+            }
+
+            // Calculates energy scaling from stats and inventory
+            let energy_mods = StatsModifier {
+                add_mod: stat.max_energy_modifiers.add_mod
+                    + combat::compute_max_energy_mod(inventory, &read_data.msm),
+                mult_mod: stat.max_energy_modifiers.mult_mod,
+            };
+
+            if let Some(new_max) = energy.needs_maximum_update(energy_mods) {
+                // Only call this if we need to since mutable access will trigger sending an
+                // update to the client.
+                energy.update_internal_integer_maximum(new_max);
+            }
+        }
+
+        // Apply effects from leveling skills
+        for (mut skill_set, mut health, mut energy, body) in (
+            &mut skill_sets,
+            &mut healths,
+            &mut energies,
+            &read_data.bodies,
+        )
+            .join()
+        {
+            if skill_set.modify_health {
+                let health_level = skill_set
+                    .skill_level(Skill::General(GeneralSkill::HealthIncrease))
+                    .unwrap_or(0);
+                health.update_max_hp(*body, health_level);
+                skill_set.modify_health = false;
+            }
+            if skill_set.modify_energy {
+                let energy_level = skill_set
+                    .skill_level(Skill::General(GeneralSkill::EnergyIncrease))
+                    .unwrap_or(0);
+                energy.update_max_energy(*body, energy_level);
+                skill_set.modify_energy = false;
+            }
+        }
+
+        // Update energies and poises
+        for (character_state, mut energy, mut poise) in
+            (&read_data.char_states, &mut energies, &mut poises).join()
+        {
+            match character_state {
+                // Accelerate recharging energy.
+                CharacterState::Idle { .. }
+                | CharacterState::Talk { .. }
+                | CharacterState::Sit { .. }
+                | CharacterState::Dance { .. }
+                | CharacterState::Glide { .. }
+                | CharacterState::Skate { .. }
+                | CharacterState::GlideWield { .. }
+                | CharacterState::Wielding { .. }
+                | CharacterState::Equipping { .. }
+                | CharacterState::Boost { .. } => {
+                    let res = { energy.current() < energy.maximum() };
+
+                    if res {
+                        let energy = &mut *energy;
+                        energy.change_by(energy.regen_rate * dt);
+                        energy.regen_rate = (energy.regen_rate + ENERGY_REGEN_ACCEL * dt).min(10.0);
+                    }
+
+                    let res_poise = { poise.current() < poise.maximum() };
+
+                    if res_poise {
+                        let poise = &mut *poise;
+                        let poise_change = PoiseChange {
+                            amount: poise.regen_rate * dt,
+                            impulse: Vec3::zero(),
+                            by: None,
+                            cause: None,
+                            time: *read_data.time,
+                        };
+                        poise.change(poise_change);
+                        poise.regen_rate = (poise.regen_rate + POISE_REGEN_ACCEL * dt).min(10.0);
+                    }
+                },
+                // Ability use does not regen and sets the rate back to zero.
+                CharacterState::BasicMelee { .. }
+                | CharacterState::DashMelee { .. }
+                | CharacterState::LeapMelee { .. }
+                | CharacterState::SpinMelee { .. }
+                | CharacterState::ComboMelee { .. }
+                | CharacterState::BasicRanged { .. }
+                | CharacterState::ChargedMelee { .. }
+                | CharacterState::ChargedRanged { .. }
+                | CharacterState::RepeaterRanged { .. }
+                | CharacterState::Shockwave { .. }
+                | CharacterState::BasicBeam { .. }
+                | CharacterState::BasicAura { .. }
+                | CharacterState::Blink { .. }
+                | CharacterState::BasicSummon { .. }
+                | CharacterState::SelfBuff { .. }
+                | CharacterState::SpriteSummon { .. } => {
+                    if energy.regen_rate != 0.0 {
+                        energy.regen_rate = 0.0
+                    }
+                },
+                // Abilities that temporarily stall energy gain, but preserve regen_rate.
+                CharacterState::Roll { .. }
+                | CharacterState::Wallrun { .. }
+                | CharacterState::Climb { .. }
+                | CharacterState::Stunned { .. }
+                | CharacterState::BasicBlock { .. }
+                | CharacterState::UseItem { .. }
+                | CharacterState::SpriteInteract { .. } => {},
+            }
+        }
+
+        // Decay combo
+        for (_, mut combo) in (&read_data.entities, &mut combos).join() {
+            if combo.counter() > 0
+                && read_data.time.0 - combo.last_increase() > comp::combo::COMBO_DECAY_START
+            {
+                combo.reset();
+            }
+        }
+    }
+}

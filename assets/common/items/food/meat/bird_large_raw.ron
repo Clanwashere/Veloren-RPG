@@ -1,0 +1,22 @@
+ItemDef(
+    name: "Huge Raw Drumstick",
+    description: "It's magnificent.",
+    kind: Consumable(
+        kind: Food,
+        effects: [
+            Buff((
+                kind: Saturation,
+                data: (
+                    strength: .9,
+                    duration: Some((
+                            secs: 10,
+                            nanos: 0,
+                        )),
+                    ),
+                cat_ids: [Natural],
+            )),
+        ]
+    ),
+    quality: Common,
+    tags: [Food],
+)

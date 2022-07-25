@@ -1,0 +1,13 @@
+SpawnEntry (
+    name: "Desert river wildlife.",
+    note: "",
+    rules: [
+        Pack(
+            groups: [
+                (1, (1, 1, "common.entity.wild.aggressive.crocodile")),
+            ],
+            spawn_mode: Land,
+            day_period: [Night, Morning, Noon, Evening],
+        ),
+    ],
+)

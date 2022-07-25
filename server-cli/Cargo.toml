@@ -1,0 +1,53 @@
+[package]
+name = "veloren-server-cli"
+version = "0.13.0"
+authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>"]
+edition = "2021"
+
+[package.metadata.nix]
+build = true
+app = true
+longDescription = """
+Veloren is a multiplayer voxel RPG written in Rust.
+It is inspired by games such as Cube World, Legend of Zelda: Breath of the Wild, Dwarf Fortress and Minecraft.
+
+This package includes the official server CLI.
+"""
+
+[features]
+worldgen = ["server/worldgen"]
+persistent_world = ["server/persistent_world"]
+# needed to stay compatible with voxygens format
+default-publish = ["default"]
+default = ["worldgen", "persistent_world"]
+tracy = ["common-frontend/tracy"]
+plugins = ["server/plugins"]
+hot-reloading = ["server/hot-reloading"]
+
+[dependencies]
+server = { package = "veloren-server", path = "../server", default-features = false, features = ["simd"] }
+common = { package = "veloren-common", path = "../common" }
+common-base = { package = "veloren-common-base", path = "../common/base" }
+common-net = { package = "veloren-common-net", path = "../common/net" }
+common-frontend = { package = "veloren-common-frontend", path = "../common/frontend" }
+
+tokio = { version = "1.14", default-features = false, features = ["rt-multi-thread"] }
+num_cpus = "1.0"
+ansi-parser = "0.8"
+clap = { version = "3.1.8", features = ["derive"] }
+crossterm = "0.23"
+lazy_static = "1"
+signal-hook = "0.3.6"
+shell-words = "1.0.0"
+tracing = { version = "0.1", default-features = false }
+ron = {version = "0.7", default-features = false}
+serde = {version = "1.0", features = [ "rc", "derive" ]}
+
+[target.'cfg(windows)'.dependencies]
+mimalloc = "0.1.29"
+
+[dependencies.tui]
+git = "https://github.com/fdehau/tui-rs.git"
+branch="paragraph-scroll"
+default-features = false
+features = ['crossterm']
